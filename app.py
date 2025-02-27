@@ -2,8 +2,7 @@ import streamlit as st
 
 # Must be the first Streamlit command
 st.set_page_config(
-    page_title="Talk with PDF",
-    page_icon="icon.png"
+    page_title="PDF QUERY",
 )
 
 from dotenv import load_dotenv
