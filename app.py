@@ -21,6 +21,7 @@ from langchain.chains import ConversationalRetrievalChain
 from htmlTemplates import css, bot_template, user_template, hide_st_style, footer
 from langchain.llms import HuggingFaceHub
 from matplotlib import style
+import pandas as pd
 
 
 def get_pdf_text(pdf_docs):
@@ -32,12 +33,25 @@ def get_pdf_text(pdf_docs):
     return text
 
 
+def get_csv_text(csv_docs):
+    """Process CSV files and convert to text format"""
+    text = ""
+    for csv in csv_docs:
+        df = pd.read_csv(csv)
+        # Add column names as context
+        text += f"Dataset Columns: {', '.join(df.columns)}\n\n"
+        # Convert each row to formatted text
+        for idx, row in df.iterrows():
+            text += f"Row {idx}:\n"
+            for col, val in row.items():
+                text += f"{col}: {val}\n"
+            text += "\n"
+    return text
+
+
 def get_text_chunks(text):
     text_splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len
+        separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len
     )
     chunks = text_splitter.split_text(text)
     return chunks
@@ -45,8 +59,7 @@ def get_text_chunks(text):
 
 def get_vectorstore(text_chunks):
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001",
-        google_api_key=os.getenv('GOOGLE_API_KEY')
+        model="models/embedding-001", google_api_key=os.getenv("GOOGLE_API_KEY")
     )
     vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
     return vectorstore
@@ -56,54 +69,54 @@ def get_conversation_chain(vectorstore):
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.0-flash",  # Updated model name
         temperature=0.7,
-        google_api_key=os.getenv('GOOGLE_API_KEY')
+        google_api_key=os.getenv("GOOGLE_API_KEY"),
     )
 
-    memory = ConversationBufferMemory(
-        memory_key='chat_history', return_messages=True)
+    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
     conversation_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=vectorstore.as_retriever(),
-        memory=memory
+        llm=llm, retriever=vectorstore.as_retriever(), memory=memory
     )
     return conversation_chain
 
 
 def handle_userinput(user_question):
     if st.session_state.conversation is None:
-        st.error("Please upload PDF data before starting the chat.")
+        st.error("Please upload and process your data before starting the chat.")
         return
 
-    response = st.session_state.conversation({'question': user_question})
-    st.session_state.chat_history = response['chat_history']
+    response = st.session_state.conversation({"question": user_question})
+    st.session_state.chat_history = response["chat_history"]
 
     for i, message in enumerate(st.session_state.chat_history):
         if i % 2 == 0:
-            st.write(user_template.replace(
-                "{{MSG}}", message.content), unsafe_allow_html=True)
+            st.write(
+                user_template.replace("{{MSG}}", message.content),
+                unsafe_allow_html=True,
+            )
         else:
-            st.write(bot_template.replace(
-                "{{MSG}}", message.content), unsafe_allow_html=True)
+            st.write(
+                bot_template.replace("{{MSG}}", message.content), unsafe_allow_html=True
+            )
 
 
 def main():
     load_dotenv()
-    
+
     # Debug API key
-    GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
     if not GOOGLE_API_KEY:
         st.error("Google API key not found. Please check your .env file.")
         return
-    
+
     # Test API connection
     try:
         genai.configure(api_key=GOOGLE_API_KEY)
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel("gemini-2.0-flash")
         st.success("Successfully connected to Gemini API")
     except Exception as e:
         st.error(f"Error connecting to Gemini API: {str(e)}")
         return
-    
+
     st.write(css, unsafe_allow_html=True)
 
     if "conversation" not in st.session_state:
@@ -116,20 +129,32 @@ def main():
 
     with st.sidebar:
         st.subheader("Your documents")
-        pdf_docs = st.file_uploader(
-            "Upload your Data here  in PDF format and click on 'Process'", accept_multiple_files=True, type=['pdf'])
+        file_type = st.radio("Choose file type:", ["PDF", "CSV"])
+
+        if file_type == "PDF":
+            uploaded_files = st.file_uploader(
+                "Upload your PDFs here", accept_multiple_files=True, type=["pdf"]
+            )
+        else:
+            uploaded_files = st.file_uploader(
+                "Upload your CSVs here", accept_multiple_files=True, type=["csv"]
+            )
 
         if st.button("Process"):
-            if pdf_docs is None:
-                st.error("Please upload at least one PDF file.")
+            if not uploaded_files:
+                st.error(f"Please upload at least one {file_type} file.")
             else:
                 with st.spinner("Processing"):
-                    raw_text = get_pdf_text(pdf_docs)
+                    # Process based on file type
+                    raw_text = (
+                        get_pdf_text(uploaded_files)
+                        if file_type == "PDF"
+                        else get_csv_text(uploaded_files)
+                    )
                     text_chunks = get_text_chunks(raw_text)
                     vectorstore = get_vectorstore(text_chunks)
-                    st.session_state.conversation = get_conversation_chain(
-                        vectorstore)
-                    st.success("Your Data has been processed successfully")
+                    st.session_state.conversation = get_conversation_chain(vectorstore)
+                    st.success(f"Your {file_type} data has been processed successfully")
 
     if user_question:
         handle_userinput(user_question)
@@ -138,5 +163,5 @@ def main():
     st.markdown(footer, unsafe_allow_html=True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
