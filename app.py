@@ -1,26 +1,16 @@
 import streamlit as st
-
-# Must be the first Streamlit command
-st.set_page_config(
-    page_title="PDF QUERY",
-)
-
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings, HuggingFaceInstructEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.chat_models import ChatOpenAI
+from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 import google.generativeai as genai
 import os
-
-from langchain.memory import ConversationBufferMemory
+from langchain.memory import ConversationBufferMemory  # Updated import
+from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import ConversationalRetrievalChain
 from htmlTemplates import css, bot_template, user_template, hide_st_style, footer
-from langchain.llms import HuggingFaceHub
-from matplotlib import style
 import pandas as pd
 
 
@@ -51,7 +41,7 @@ def get_csv_text(csv_docs):
 
 def get_text_chunks(text):
     text_splitter = CharacterTextSplitter(
-        separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len
+        separator="\n", chunk_size=2000, chunk_overlap=400, length_function=len
     )
     chunks = text_splitter.split_text(text)
     return chunks
@@ -124,7 +114,7 @@ def main():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
 
-    st.header("Chat with AI with Custom Data 🚀")
+    st.header("Chat with AI with Custom Data ")
     user_question = st.text_input("Ask a question about your Data:")
 
     with st.sidebar:
